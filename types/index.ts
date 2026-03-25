@@ -28,6 +28,8 @@ export interface User {
   email: string;
   phone?: string;
   businessNumber?: string;
+  companyName?: string;
+  createdAt?: string;
 }
 
 // =====================

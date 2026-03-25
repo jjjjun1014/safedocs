@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, 
   Download, 
-  FileArchive,
   Calendar,
   FileText,
   AlertTriangle,
@@ -23,7 +22,8 @@ import {
   Badge,
   PageHeader,
 } from '@/components/ui';
-import { DOC_TYPES, DocType } from '@/lib/constants/docTypes';
+import { DOC_TYPES } from '@/lib/constants/docTypes';
+import type { DocType } from '@/types';
 
 // 기간 필터 옵션
 const PERIOD_OPTIONS = [
@@ -135,13 +135,21 @@ export default function InspectionPage() {
     );
   };
 
-  const handleDownloadZip = async () => {
+  const handleDownloadIndividual = async () => {
     if (selectedDocs.length === 0) return;
     setIsDownloading(true);
-    // TODO: API 호출하여 ZIP 다운로드
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    
+    // 선택된 문서를 하나씩 새 탭에서 열어 인쇄(PDF 저장)
+    for (const docId of selectedDocs) {
+      const doc = filteredDocs.find((d) => d.id === docId);
+      if (doc) {
+        window.open(`/documents/${doc.id}`, '_blank');
+      }
+      // 브라우저 과부하 방지
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    
     setIsDownloading(false);
-    // 다운로드 완료 처리
   };
 
   const completedCount = checklist.filter((item) => item.checked).length;
@@ -180,11 +188,10 @@ export default function InspectionPage() {
             {checklist.map((item) => (
               <ChecklistItem
                 key={item.id}
+                label={item.label}
                 checked={item.checked}
                 onChange={() => toggleChecklistItem(item.id)}
-              >
-                <span className="text-sm text-text-primary">{item.label}</span>
-              </ChecklistItem>
+              />
             ))}
           </div>
         </Card>
@@ -290,16 +297,16 @@ export default function InspectionPage() {
       <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 safe-area-bottom">
         <div className="max-w-lg mx-auto">
           <Button
-            onClick={handleDownloadZip}
+            onClick={handleDownloadIndividual}
             disabled={selectedDocs.length === 0 || isDownloading}
             className="w-full"
           >
             {isDownloading ? (
-              '압축 중...'
+              '문서 열는 중...'
             ) : (
               <>
-                <FileArchive className="h-4 w-4 mr-2" />
-                선택 문서 ZIP 다운로드 ({selectedDocs.length}건)
+                <Download className="h-4 w-4 mr-2" />
+                선택 문서 개별 열기 ({selectedDocs.length}건)
               </>
             )}
           </Button>

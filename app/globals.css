@@ -165,3 +165,47 @@ input, select, textarea {
 .animate-slide-down {
   animation: slideDown 0.3s ease-out;
 }
+
+/* Print styles - Only show document content */
+@media print {
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only the printable document */
+  .print-content,
+  .print-content * {
+    visibility: visible;
+  }
+
+  .print-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Hide specific elements */
+  .print\:hidden,
+  [class*="print:hidden"] {
+    display: none !important;
+  }
+
+  /* Reset background for print */
+  body {
+    background: white !important;
+  }
+
+  /* Ensure proper page breaks */
+  .print-content {
+    page-break-inside: avoid;
+  }
+
+  /* Remove shadows and decorations */
+  .print-content * {
+    box-shadow: none !important;
+  }
+}

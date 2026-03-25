@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   X,
+  Edit,
 } from 'lucide-react';
 import { 
   Card, 
@@ -22,69 +23,25 @@ import {
   BottomSheet,
   Select,
 } from '@/components/ui';
-import { DOC_TYPES, DocType } from '@/lib/constants/docTypes';
+import { DOC_TYPES } from '@/lib/constants/docTypes';
+import type { DocType } from '@/types';
 import { TRADES, getTradeLabel } from '@/lib/constants/trades';
-
-// 임시 문서 데이터
-const MOCK_DOCUMENTS = [
-  {
-    id: '1',
-    type: 'tbm' as DocType,
-    title: '철근공 TBM',
-    date: '2024-01-15',
-    trade: 'rebar',
-    status: 'completed' as const,
-  },
-  {
-    id: '2',
-    type: 'tbm' as DocType,
-    title: '콘크리트공 TBM',
-    date: '2024-01-15',
-    trade: 'concrete',
-    status: 'completed' as const,
-  },
-  {
-    id: '3',
-    type: 'risk' as DocType,
-    title: '철근공 위험성평가',
-    date: '2024-01-15',
-    trade: 'rebar',
-    status: 'completed' as const,
-  },
-  {
-    id: '4',
-    type: 'risk' as DocType,
-    title: '콘크리트공 위험성평가',
-    date: '2024-01-14',
-    trade: 'concrete',
-    status: 'completed' as const,
-  },
-  {
-    id: '5',
-    type: 'education' as DocType,
-    title: '신규자 안전교육',
-    date: '2024-01-14',
-    trade: 'common',
-    status: 'draft' as const,
-  },
-  {
-    id: '6',
-    type: 'workplan' as DocType,
-    title: '금일 작업계획서',
-    date: '2024-01-14',
-    trade: 'formwork',
-    status: 'completed' as const,
-  },
-];
+import { documentStore, type StoredDocument } from '@/lib/store/documentStore';
 
 function DocumentsContent() {
   const searchParams = useSearchParams();
   const showSuccess = searchParams.get('success') === 'true';
 
+  const [documents, setDocuments] = useState<StoredDocument[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDocType, setSelectedDocType] = useState<DocType | 'all'>('all');
   const [selectedTrade, setSelectedTrade] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+
+  // 문서 목록 로드
+  useEffect(() => {
+    setDocuments(documentStore.getAll());
+  }, []);
 
   const docTypeTabs = [
     { value: 'all', label: '전체' },
@@ -94,9 +51,9 @@ function DocumentsContent() {
     })),
   ];
 
-  const filteredDocs = MOCK_DOCUMENTS.filter((doc) => {
+  const filteredDocs = documents.filter((doc) => {
     // 문서 유형 필터
-    if (selectedDocType !== 'all' && doc.type !== selectedDocType) {
+    if (selectedDocType !== 'all' && doc.docType !== selectedDocType) {
       return false;
     }
     // 공종 필터
@@ -104,7 +61,7 @@ function DocumentsContent() {
       return false;
     }
     // 검색어 필터
-    if (searchQuery && !doc.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+    if (searchQuery && !doc.tradeName.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
     return true;
@@ -124,8 +81,8 @@ function DocumentsContent() {
 
       <PageHeader
         title="문서 목록"
-        description="작성된 안전서류를 확인하세요"
-        action={
+        subtitle="작성된 안전서류를 확인하세요"
+        actions={
           <Link href="/documents/new">
             <Button size="sm">
               <Plus className="h-4 w-4 mr-1" />
@@ -142,12 +99,12 @@ function DocumentsContent() {
           <Input
             placeholder="문서 검색..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(value) => setSearchQuery(value)}
             className="pl-10"
           />
         </div>
         <Button
-          variant="outline"
+          variant="secondary"
           onClick={() => setShowFilters(true)}
           className="relative"
         >
@@ -171,7 +128,7 @@ function DocumentsContent() {
           <span className="text-xs text-text-secondary">필터:</span>
           {selectedTrade !== 'all' && (
             <Badge
-              variant="outline"
+              variant="neutral"
               className="flex items-center gap-1 cursor-pointer"
               onClick={() => setSelectedTrade('all')}
             >
@@ -206,7 +163,7 @@ function DocumentsContent() {
       ) : (
         <div className="space-y-2">
           {filteredDocs.map((doc) => {
-            const docType = DOC_TYPES[doc.type];
+            const docType = DOC_TYPES[doc.docType];
             const Icon = docType.icon;
             
             return (
@@ -223,17 +180,24 @@ function DocumentsContent() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-text-primary truncate">
-                      {doc.title}
+                      {doc.tradeName} {docType.label}
                     </p>
                     <p className="text-xs text-text-secondary">
-                      {doc.date} · {getTradeLabel(doc.trade)}
+                      {doc.workDate} · {getTradeLabel(doc.trade)}
                     </p>
                   </div>
-                  {doc.status === 'completed' ? (
+                  {doc.status === 'complete' ? (
                     <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
                   ) : (
                     <Clock className="h-5 w-5 text-warning shrink-0" />
                   )}
+                  <Link
+                    href={`/documents/new?edit=${doc.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-1.5 rounded-lg hover:bg-surface-2 text-text-muted hover:text-text-primary transition-colors shrink-0"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Link>
                 </Card>
               </Link>
             );
@@ -254,19 +218,16 @@ function DocumentsContent() {
             </label>
             <Select
               value={selectedTrade}
-              onChange={(e) => setSelectedTrade(e.target.value)}
+              onChange={(value) => setSelectedTrade(value)}
               options={[
                 { value: 'all', label: '전체 공종' },
-                ...TRADES.map((t) => ({
-                  value: t,
-                  label: getTradeLabel(t),
-                })),
+                ...TRADES,
               ]}
             />
           </div>
           <div className="flex gap-2 pt-4">
             <Button
-              variant="outline"
+              variant="secondary"
               className="flex-1"
               onClick={() => {
                 setSelectedTrade('all');

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { 
   ArrowLeft, 
@@ -10,6 +10,11 @@ import {
   Phone,
   Save,
   Check,
+  Users,
+  Plus,
+  Trash2,
+  Edit2,
+  X,
 } from 'lucide-react';
 import { 
   Button, 
@@ -17,8 +22,11 @@ import {
   Input, 
   PageHeader,
   Badge,
+  Modal,
+  Select,
 } from '@/components/ui';
 import { TRADES, getTradeLabel } from '@/lib/constants/trades';
+import { workerStore, type Worker } from '@/lib/store/workerStore';
 
 // 임시 현장 데이터
 const siteData = {
@@ -35,6 +43,7 @@ const siteData = {
 export default function SiteSettingsPage() {
   const router = useRouter();
   const params = useParams();
+  const siteId = params.id as string;
   
   const [favoriteTrades, setFavoriteTrades] = useState<string[]>(
     siteData.defaults.favoriteTrades
@@ -48,6 +57,25 @@ export default function SiteSettingsPage() {
   );
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // 작업자 관리 상태
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [showWorkerModal, setShowWorkerModal] = useState(false);
+  const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
+  const [workerForm, setWorkerForm] = useState({
+    name: '',
+    role: '',
+    trade: '',
+    phone: '',
+    company: '',
+  });
+  const [quickAddNames, setQuickAddNames] = useState('');
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+
+  // 작업자 목록 로드
+  useEffect(() => {
+    setWorkers(workerStore.getWorkers(siteId));
+  }, [siteId]);
 
   const toggleFavoriteTrade = (trade: string) => {
     setFavoriteTrades((prev) => {
@@ -66,6 +94,66 @@ export default function SiteSettingsPage() {
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2000);
   };
+
+  // 작업자 추가/수정
+  const handleSaveWorker = () => {
+    if (!workerForm.name.trim()) return;
+
+    if (editingWorker) {
+      workerStore.updateWorker(siteId, editingWorker.id, workerForm);
+    } else {
+      workerStore.addWorker(siteId, workerForm);
+    }
+    
+    setWorkers(workerStore.getWorkers(siteId));
+    handleCloseWorkerModal();
+  };
+
+  const handleCloseWorkerModal = () => {
+    setShowWorkerModal(false);
+    setEditingWorker(null);
+    setWorkerForm({ name: '', role: '', trade: '', phone: '', company: '' });
+  };
+
+  const handleEditWorker = (worker: Worker) => {
+    setEditingWorker(worker);
+    setWorkerForm({
+      name: worker.name,
+      role: worker.role || '',
+      trade: worker.trade || '',
+      phone: worker.phone || '',
+      company: worker.company || '',
+    });
+    setShowWorkerModal(true);
+  };
+
+  const handleDeleteWorker = (workerId: string) => {
+    if (confirm('이 작업자를 삭제하시겠습니까?')) {
+      workerStore.deleteWorker(siteId, workerId);
+      setWorkers(workerStore.getWorkers(siteId));
+    }
+  };
+
+  // 빠른 추가 (이름만)
+  const handleQuickAdd = () => {
+    const names = quickAddNames.split('\n').map((n) => n.trim()).filter(Boolean);
+    if (names.length > 0) {
+      workerStore.addWorkersQuick(siteId, names);
+      setWorkers(workerStore.getWorkers(siteId));
+      setQuickAddNames('');
+      setShowQuickAdd(false);
+    }
+  };
+
+  const roleOptions = [
+    { value: '', label: '직책 선택' },
+    { value: '반장', label: '반장' },
+    { value: '기공', label: '기공' },
+    { value: '조공', label: '조공' },
+    { value: '기사', label: '기사' },
+    { value: '안전관리자', label: '안전관리자' },
+    { value: '기타', label: '기타' },
+  ];
 
   return (
     <div className="min-h-screen bg-bg pb-24">
@@ -94,6 +182,86 @@ export default function SiteSettingsPage() {
           <p className="text-sm text-text-secondary">현장 기본값을 설정하세요</p>
         </Card>
 
+        {/* Workers Management */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <h2 className="text-sm font-semibold text-text-primary">
+                작업자 관리
+              </h2>
+              <Badge variant="info">{workers.length}명</Badge>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowQuickAdd(true)}
+              >
+                빠른 추가
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowWorkerModal(true)}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-text-secondary mb-3">
+            현장 작업자를 등록하면 서류 작성 시 참석자를 빠르게 선택할 수 있습니다.
+          </p>
+          
+          {workers.length === 0 ? (
+            <div className="text-center py-8 text-text-muted">
+              <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">등록된 작업자가 없습니다</p>
+              <p className="text-xs mt-1">상단 버튼으로 작업자를 추가하세요</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {workers.map((worker) => (
+                <div
+                  key={worker.id}
+                  className="flex items-center justify-between p-3 bg-surface-2 rounded-lg"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-text-primary">
+                        {worker.name}
+                      </span>
+                      {worker.role && (
+                        <Badge variant="neutral" size="sm">{worker.role}</Badge>
+                      )}
+                    </div>
+                    {(worker.trade || worker.company) && (
+                      <p className="text-xs text-text-muted mt-0.5">
+                        {worker.trade && getTradeLabel(worker.trade)}
+                        {worker.trade && worker.company && ' · '}
+                        {worker.company}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => handleEditWorker(worker)}
+                      className="p-2 text-text-muted hover:text-primary rounded-lg hover:bg-surface-3"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteWorker(worker.id)}
+                      className="p-2 text-text-muted hover:text-danger rounded-lg hover:bg-surface-3"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         {/* Favorite Trades */}
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-3">
@@ -107,11 +275,11 @@ export default function SiteSettingsPage() {
           </p>
           <div className="flex flex-wrap gap-2">
             {TRADES.map((trade) => {
-              const isSelected = favoriteTrades.includes(trade);
+              const isSelected = favoriteTrades.includes(trade.value);
               return (
                 <button
-                  key={trade}
-                  onClick={() => toggleFavoriteTrade(trade)}
+                  key={trade.value}
+                  onClick={() => toggleFavoriteTrade(trade.value)}
                   className={`
                     px-3 py-2 rounded-lg text-sm font-medium transition-colors
                     ${isSelected 
@@ -121,7 +289,7 @@ export default function SiteSettingsPage() {
                   `}
                 >
                   {isSelected && <Check className="h-3 w-3 inline mr-1" />}
-                  {getTradeLabel(trade)}
+                  {trade.label}
                 </button>
               );
             })}
@@ -142,7 +310,7 @@ export default function SiteSettingsPage() {
           <Input
             placeholder="기본 작성자 이름"
             value={defaultAuthor}
-            onChange={(e) => setDefaultAuthor(e.target.value)}
+            onChange={(value) => setDefaultAuthor(value)}
           />
         </Card>
 
@@ -157,7 +325,7 @@ export default function SiteSettingsPage() {
           <Input
             placeholder="기본 하도급사"
             value={defaultSubcontractor}
-            onChange={(e) => setDefaultSubcontractor(e.target.value)}
+            onChange={(value) => setDefaultSubcontractor(value)}
           />
         </Card>
 
@@ -173,7 +341,7 @@ export default function SiteSettingsPage() {
             type="tel"
             placeholder="010-0000-0000"
             value={safetyOfficerPhone}
-            onChange={(e) => setSafetyOfficerPhone(e.target.value)}
+            onChange={(value) => setSafetyOfficerPhone(value)}
           />
         </Card>
       </div>
@@ -202,6 +370,94 @@ export default function SiteSettingsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Worker Add/Edit Modal */}
+      <Modal
+        isOpen={showWorkerModal}
+        onClose={handleCloseWorkerModal}
+        title={editingWorker ? '작업자 수정' : '작업자 추가'}
+        size="md"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={handleCloseWorkerModal}>
+              취소
+            </Button>
+            <Button onClick={handleSaveWorker} disabled={!workerForm.name.trim()}>
+              {editingWorker ? '수정' : '추가'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="이름 *"
+            placeholder="작업자 이름"
+            value={workerForm.name}
+            onChange={(value) => setWorkerForm((prev) => ({ ...prev, name: value }))}
+          />
+          <Select
+            label="직책"
+            value={workerForm.role}
+            onChange={(value) => setWorkerForm((prev) => ({ ...prev, role: value }))}
+            options={roleOptions}
+          />
+          <Select
+            label="공종"
+            value={workerForm.trade}
+            onChange={(value) => setWorkerForm((prev) => ({ ...prev, trade: value }))}
+            options={[
+              { value: '', label: '공종 선택' },
+              ...TRADES,
+            ]}
+          />
+          <Input
+            label="연락처"
+            type="tel"
+            placeholder="010-0000-0000"
+            value={workerForm.phone}
+            onChange={(value) => setWorkerForm((prev) => ({ ...prev, phone: value }))}
+          />
+          <Input
+            label="소속 업체"
+            placeholder="업체명"
+            value={workerForm.company}
+            onChange={(value) => setWorkerForm((prev) => ({ ...prev, company: value }))}
+          />
+        </div>
+      </Modal>
+
+      {/* Quick Add Modal */}
+      <Modal
+        isOpen={showQuickAdd}
+        onClose={() => setShowQuickAdd(false)}
+        title="작업자 빠른 추가"
+        size="md"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => setShowQuickAdd(false)}>
+              취소
+            </Button>
+            <Button onClick={handleQuickAdd} disabled={!quickAddNames.trim()}>
+              추가
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-text-secondary">
+            이름만 빠르게 등록합니다. 줄바꿈으로 여러 명을 한 번에 추가하세요.
+          </p>
+          <textarea
+            className="w-full h-40 px-3 py-2 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary bg-surface text-text-primary placeholder:text-text-muted"
+            placeholder="홍길동&#10;김철수&#10;이영희&#10;..."
+            value={quickAddNames}
+            onChange={(e) => setQuickAddNames(e.target.value)}
+          />
+          <p className="text-xs text-text-muted">
+            총 {quickAddNames.split('\n').filter((n) => n.trim()).length}명
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }

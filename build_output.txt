@@ -1,0 +1,8 @@
+
+> safedocs@0.1.0 build C:\Users\PC\OneDrive\Desktop\safedocs
+> next build
+
+  ▲ Next.js 14.2.3
+  - Environments: .env.local
+
+   Creating an optimized production build ...
